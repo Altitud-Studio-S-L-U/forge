@@ -1,0 +1,8 @@
+{
+  "name": "forge",
+  "version": "0.1.0",
+  "description": "Coordinate Codex and Claude Code for local research, independent review, and bounded implementation.",
+  "author": {
+    "name": "Altitud Studio"
+  }
+}

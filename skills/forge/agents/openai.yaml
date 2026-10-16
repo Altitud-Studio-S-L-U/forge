@@ -1,0 +1,4 @@
+interface:
+  display_name: "Forge"
+  short_description: "Coordinate Codex and Claude Code on local code"
+  default_prompt: "Use $forge to coordinate Codex and Claude Code on this repository task, with explicit files and independent review."
