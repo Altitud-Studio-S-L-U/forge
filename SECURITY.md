@@ -1,6 +1,6 @@
 # Security
 
-Forge is experimental local orchestration tooling. It is not an operating
+Forge coordinates local code-change and review workflows. It is not an operating
 system sandbox and does not make a model-generated change trustworthy.
 
 The operator trusts the installed provider CLIs, their authentication stores,

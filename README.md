@@ -12,7 +12,7 @@
 
 Forge coordinates an installed Codex CLI and Claude Code CLI using their existing local authentication. It runs on Node 24 without npm dependencies. One provider proposes a bounded code change and the other independently reviews it; their roles are interchangeable. Nothing commits, pushes, merges or deploys.
 
-Experimental developer tooling by [Altitud Studio](https://altitudstudio.ad). The package is not published to npm. Use a Git checkout with both provider CLIs installed and already authenticated; provider usage is subject to those accounts' limits. A passing model review is an opinion, not proof of correctness.
+Developer tooling by [Altitud Studio](https://altitudstudio.ad). The package is not published to npm. Use a Git checkout with both provider CLIs installed and already authenticated; provider usage is subject to those accounts' limits. A passing model review is an opinion, not proof of correctness.
 
 ## Run
 
