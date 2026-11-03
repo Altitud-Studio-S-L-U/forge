@@ -1,0 +1,1 @@
+Correct sum.mjs so sum(a, b) adds two numbers. The independent, unchanged test checks sum(2, 3) === 5, sum(-2, 3) === 1 and sum(0, 0) === 0. This is a synthetic example. Return only a replacement for sum.mjs, using its exact supplied precondition hash. Do not use tools or change the test.

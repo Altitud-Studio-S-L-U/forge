@@ -21,6 +21,8 @@ Developer tooling by [Altitud Studio](https://altitudstudio.ad). The package is 
 
 ## Run
 
+Start with the [executable quickstart](examples/quickstart/README.md): prepare a failing synthetic project without provider access, then run a real Codex proposal and Claude review. It checks the resulting diff, unchanged test and uncommitted state. For a fixed source snapshot, use the [versioned releases](https://github.com/Altitud-Studio-S-L-U/forge/releases).
+
 Read the target repository's instructions first. Put the task and evidence outside Git checkouts, then select the exact UTF-8 files to disclose. A selected path may be a new file. Each file is limited to 64 KiB, the complete captured context to 256 KiB, and a run to twelve files. Credential files, private-key formats, links and common credential-like content are rejected. Selected source is sent to the two providers through their CLIs; do not include secrets or unrelated private information.
 
 ```sh
@@ -108,6 +110,16 @@ The tests exercise real child-process exits, split UTF-8, output limits, cancell
 Adapter tests execute synthetic CLI processes through the real adapters, including argument handling, stdin, incomplete Codex streams, unknown tool operations and raw-answer cleanup. POSIX executable-link discovery is exercised on Linux; it is explicitly skipped on Windows because it describes POSIX npm installations. No account tokens or live project source are needed by the test suite.
 
 Provider integration follows the installed CLI help and official [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) and [Claude Code CLI](https://code.claude.com/docs/en/cli-reference) contracts. Model availability, native CLI formats and permissions can change; test the installed versions before relying on a different release.
+
+## CLI compatibility
+
+The adapter checks concrete CLI flags and response schemas. Use the [manual quickstart](examples/quickstart/README.md) to check your installed pair before adopting it; a version outside this table is unverified, not automatically compatible or incompatible.
+
+| Environment | Codex CLI | Claude Code | Checked integration |
+| --- | --- | --- | --- |
+| Windows, Node 24.11.1 | `0.166.0-alpha.5.1` | `2.0.59` | `--live`: Codex implementation, Node verification, Claude review; unchanged test and HEAD, one unstaged source change. |
+
+This reference was checked on 2026-11-03 with the providers' configured default models. It does not establish compatibility with other CLI versions, account permissions, models or operating systems. The Codex build above is a pre-release CLI; record the exact version instead of relying on `latest`. The automated suite separately checks provider contracts with doubles and does not need provider accounts.
 
 ## Contributing and security
 
