@@ -1,5 +1,10 @@
 # Forge
 
+[![Node.js 24](https://img.shields.io/badge/Node.js-24-43853d?logo=node.js&logoColor=white)](package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Runtime dependencies: 0](https://img.shields.io/badge/runtime_dependencies-0-245b78)](package.json)
+[![Security policy](https://img.shields.io/badge/security-policy-44546a)](SECURITY.md)
+
 ```text
   _____ ___  ____   ____ _____
  |  ___/ _ \|  _ \ / ___| ____|
