@@ -41,6 +41,18 @@ test('reviewer process failure blocks the result even after real tests pass', as
   assert.equal(report.status, 'blocked'); assert.equal(report.checks[0].status, 'passed'); assert.equal(report.error.code, 'PROCESS_FAILED');
   assert.equal(report.changedFiles[0].path, 'sum.mjs', 'Applied code stays visible even when its reviewer fails.');
 });
+
+test('a blocked review after repair remains blocked rather than ordinary findings', async t => {
+  const f = await workingFixture(t); let reviews = 0;
+  const report = await runForge(options(f), { callProvider: async call => {
+    if (call.kind === 'implement') return implement(await captureFiles(f.repo, ['sum.mjs']));
+    reviews++;
+    return { verdict: reviews === 1 ? 'changes-required' : 'blocked', summary: 'Review cannot complete.', findings: [] };
+  } });
+  assert.equal(reviews, 2);
+  assert.equal(report.status, 'blocked');
+  assert.equal(report.error.code, 'REVIEW_BLOCKED');
+});
 test('absence of independent verification is explicitly incomplete', async t => {
   const f = await workingFixture(t);
   const report = await runForge({ ...options(f), verify: undefined }, { callProvider: async call => call.kind === 'implement' ? implement(await captureFiles(f.repo, ['sum.mjs'])) : pass });
@@ -111,6 +123,53 @@ test('a concurrent edit during the final review fails closed and reports the cha
     await writeFile(join(f.repo, 'sum.mjs'), 'export const sum = () => 100;\n'); return pass;
   } });
   assert.equal(report.status, 'blocked'); assert.equal(report.error.code, 'INVALID_INPUT'); assert.equal(report.changedFiles.length, 1);
+});
+
+test('an unselected test changed during implementation blocks replacement', async t => {
+  const f = await workingFixture(t), source = await readFile(join(f.repo, 'sum.mjs'), 'utf8');
+  const report = await runForge(options(f), { callProvider: async call => {
+    if (call.kind === 'implement') {
+      await writeFile(join(f.repo, 'sum.test.mjs'), 'import "node:test";\n');
+      return implement(await captureFiles(f.repo, ['sum.mjs']));
+    }
+    return pass;
+  } });
+  assert.equal(report.status, 'blocked');
+  assert.equal(report.error.code, 'CHECKOUT_CHANGED');
+  assert.equal(await readFile(join(f.repo, 'sum.mjs'), 'utf8'), source);
+  assert.deepEqual(report.checks, []);
+});
+
+test('verification cannot change an unselected test and still produce a passing result', async t => {
+  const f = await workingFixture(t); let reviews = 0;
+  const report = await runForge(options(f), {
+    callProvider: async call => {
+      if (call.kind === 'implement') return implement(await captureFiles(f.repo, ['sum.mjs']));
+      reviews++; return pass;
+    },
+    runProcess: async call => {
+      const actual = await runProcess(call);
+      await writeFile(join(f.repo, 'sum.test.mjs'), 'import "node:test";\n');
+      return actual;
+    },
+  });
+  assert.equal(report.status, 'blocked');
+  assert.equal(report.error.code, 'CHECKOUT_CHANGED');
+  assert.equal(reviews, 0);
+});
+
+test('staging selected code or adding an unselected file during review blocks acceptance', async t => {
+  for (const change of ['stage', 'new-file']) {
+    const f = await workingFixture(t);
+    const report = await runForge(options(f), { callProvider: async call => {
+      if (call.kind === 'implement') return implement(await captureFiles(f.repo, ['sum.mjs']));
+      if (change === 'stage') await f.git(['add', '--', 'sum.mjs']);
+      else await writeFile(join(f.repo, 'another file.txt'), 'Concurrent work.\n');
+      return pass;
+    } });
+    assert.equal(report.status, 'blocked');
+    assert.equal(report.error.code, 'CHECKOUT_CHANGED');
+  }
 });
 test('evidence cannot be written inside the target or another repository', async t => {
   const f = await workingFixture(t);

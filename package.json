@@ -2,9 +2,13 @@
   "name": "@altitud-studio/forge",
   "version": "0.1.0",
   "private": true,
+  "description": "Bounded local code changes with independent Codex and Claude Code review",
   "type": "module",
   "engines": { "node": ">=24 <25" },
   "bin": { "forge": "./src/cli.mjs" },
   "scripts": { "test": "node --test test/*.test.mjs", "check": "node --check src/cli.mjs && node --test test/*.test.mjs" },
-  "license": "UNLICENSED"
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Altitud-Studio-S-L-U/forge.git" },
+  "homepage": "https://github.com/Altitud-Studio-S-L-U/forge#readme",
+  "bugs": { "url": "https://github.com/Altitud-Studio-S-L-U/forge/issues" }
 }
