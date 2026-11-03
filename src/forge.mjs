@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { ForgeError, requireInput, digest } from './errors.mjs';
 import { rejectCredentials, parseResponse } from './contracts.mjs';
 import { canonicalRoot, captureFiles, fileSnapshot, applyChanges } from './files.mjs';
-import { repositoryState, assertHead } from './git.mjs';
+import { repositoryState, assertHead, assertImplementationScope } from './git.mjs';
 import { callProvider } from './providers.mjs';
 import { runProcess } from './process.mjs';
 
@@ -75,6 +75,7 @@ export async function runForge(options, dependencies = {}) {
   };
   const checks = async name => {
     if (!verify) return false;
+    await assertImplementationScope(repo, initial, options.files);
     const began = Date.now();
     try {
       await (dependencies.runProcess ?? runProcess)({ executable: verify[0], args: verify.slice(1), cwd: repo, signal,
@@ -107,19 +108,22 @@ export async function runForge(options, dependencies = {}) {
       const implement = async (name, feedback) => {
         const result = await phase(name, coder, 'implement', current, feedback ? { feedback } : {});
         if (result.status !== 'completed') throw new ForgeError('AGENT_BLOCKED', 'The implementer could not complete the task.');
-        await assertHead(repo, initial); await applyChanges(repo, current, result.changes);
+        await assertImplementationScope(repo, initial, options.files); await applyChanges(repo, current, result.changes);
         current = await captureFiles(repo, options.files);
       };
       await implement('implement');
       let checked = await checks('verification-1');
+      await assertImplementationScope(repo, initial, options.files);
       let result = await phase('review-1', reviewer, 'review', current, { before: original, checks: report.checks });
       if (result.verdict === 'blocked') throw new ForgeError('REVIEW_BLOCKED', 'Independent reviewer could not complete the review.');
       if (result.verdict === 'changes-required' || verify && !checked) {
         await implement('repair', { review: result, checks: report.checks });
         checked = await checks('verification-2');
+        await assertImplementationScope(repo, initial, options.files);
         result = await phase('review-2', reviewer, 'review', current, { before: original, checks: report.checks });
       }
-      await assertHead(repo, initial);
+      if (result.verdict === 'blocked') throw new ForgeError('REVIEW_BLOCKED', 'Independent reviewer could not complete the review.');
+      await assertImplementationScope(repo, initial, options.files);
       requireInput(JSON.stringify(await captureFiles(repo, options.files)) === JSON.stringify(current), 'Files changed after verification or review.');
       report.changedFiles = current.filter(file => file.sha256 !== original.find(previous => previous.path === file.path)?.sha256).map(({ path, sha256 }) => ({ path, sha256 }));
       report.status = result.verdict !== 'pass' || verify && !checked ? 'findings' : !verify ? 'needs-verification' : 'ready-for-human-review';

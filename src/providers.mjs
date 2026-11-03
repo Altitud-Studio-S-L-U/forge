@@ -1,4 +1,4 @@
-import { access, lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { schemas, parseResponse } from './contracts.mjs';
 import { ForgeError, requireInput } from './errors.mjs';
@@ -9,16 +9,23 @@ async function onPath(name) {
   for (const directory of (process.env.PATH ?? '').split(process.platform === 'win32' ? ';' : ':')) {
     for (const candidate of names) {
       const file = resolve(directory.replace(/^"|"$/gu, ''), candidate);
-      try { await access(file); if ((await lstat(file)).isFile()) return file; } catch {}
+      try {
+        const target = await realpath(file);
+        if ((await lstat(target)).isFile()) return target;
+      } catch {}
     }
   }
   throw new ForgeError('PROVIDER_UNAVAILABLE', `The ${name} CLI is not available on PATH.`);
 }
 export async function providerExecutable(name, configured = process.env[`FORGE_${name.toUpperCase()}_EXECUTABLE`]) {
   requireInput(name === 'codex' || name === 'claude', 'Provider must be codex or claude.');
-  const path = configured ? resolve(configured) : await onPath(name);
   requireInput(!configured || isAbsolute(configured), 'Configured provider executable must be an absolute path.');
-  try { requireInput((await lstat(path)).isFile(), 'Provider executable must be a file.'); }
+  let path;
+  try {
+    // npm installs POSIX commands as links. The operator-selected CLI remains a trusted executable.
+    path = await realpath(configured ?? await onPath(name));
+    requireInput((await lstat(path)).isFile(), 'Provider executable must be a file.');
+  }
   catch (error) { if (error instanceof ForgeError) throw error; throw new ForgeError('PROVIDER_UNAVAILABLE', 'Provider executable is unavailable.'); }
   if (extname(path).toLowerCase() === '.js' || extname(path).toLowerCase() === '.mjs') return { executable: process.execPath, prefix: [path] };
   if (process.platform === 'win32' && extname(path).toLowerCase() === '.cmd') {
@@ -44,14 +51,25 @@ export function decodeClaude(stdout, kind) {
   return parseResponse(kind, JSON.stringify(envelope.structured_output));
 }
 function validateCodexEvents(stdout) {
+  let started = false, completed = false;
+  const dataItems = new Set(['reasoning', 'agent_message', 'todo_list']);
   for (const line of stdout.split(/\r?\n/u).filter(Boolean)) {
     let item;
     try { item = JSON.parse(line); } catch { throw new ForgeError('INVALID_RESPONSE', 'Codex emitted an incomplete event stream.'); }
+    if (!item || typeof item !== 'object' || typeof item.type !== 'string') throw new ForgeError('INVALID_RESPONSE', 'Codex emitted an incompatible event.');
     if (['error', 'turn.failed'].includes(item.type)) throw new ForgeError('PROVIDER_FAILED', 'Codex reported a failed turn.');
-    if (item.item && ['command_execution', 'mcp_tool_call', 'web_search', 'file_change'].includes(item.item.type)) {
-      throw new ForgeError('UNEXPECTED_TOOL_USE', 'The bounded agent attempted a tool operation.');
+    if (completed) throw new ForgeError('INVALID_RESPONSE', 'Codex emitted events after its completed turn.');
+    if (item.type === 'thread.started' && !started) continue;
+    if (item.type === 'turn.started' && !started) { started = true; continue; }
+    if (item.type === 'turn.completed' && started) { completed = true; continue; }
+    if (['item.started', 'item.updated', 'item.completed'].includes(item.type) && started) {
+      if (!item.item || typeof item.item.type !== 'string') throw new ForgeError('INVALID_RESPONSE', 'Codex emitted an incompatible item.');
+      if (!dataItems.has(item.item.type)) throw new ForgeError('UNEXPECTED_TOOL_USE', 'The bounded agent emitted an unsupported or tool item.');
+      continue;
     }
+    throw new ForgeError('INVALID_RESPONSE', 'Codex emitted an unsupported event or turn sequence.');
   }
+  if (!completed) throw new ForgeError('INVALID_RESPONSE', 'Codex did not emit a completed turn.');
 }
 export async function callProvider({ provider, kind, prompt, directory, signal, timeoutMs, model }) {
   requireInput(model === undefined || typeof model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(model), 'Model must be an explicit bounded identifier.');
