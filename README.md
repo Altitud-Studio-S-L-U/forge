@@ -7,19 +7,30 @@
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime_dependencies-0-245b78)](package.json)
 [![Security policy](https://img.shields.io/badge/security-policy-44546a)](SECURITY.md)
 
-```text
-  _____ ___  ____   ____ _____
- |  ___/ _ \|  _ \ / ___| ____|
- | |_ | | | | |_) | |  _|  _|
- |  _|| |_| |  _ <| |_| | |___
- |_|   \___/|_| \_\\____|_____|
-
- explicit context -> proposal -> check -> independent review
-```
+**Propose a code change, run your checks, and have a second coding agent review the result.**
 
 Forge coordinates an installed Codex CLI and Claude Code CLI using their existing local authentication. It runs on Node 24 without npm dependencies. One provider proposes a bounded code change and the other independently reviews it; their roles are interchangeable. Nothing commits, pushes, merges or deploys.
 
 Developer tooling by [Altitud Studio](https://altitudstudio.ad). The package is not published to npm. Use a Git checkout with both provider CLIs installed and already authenticated; provider usage is subject to those accounts' limits. A passing model review is an opinion, not proof of correctness.
+
+## See the workflow
+
+The included synthetic example starts with `sum(a, b)` subtracting its operands. A successful live run changes that function, passes the unchanged test and leaves the change uncommitted for review.
+
+```text
+Selected files + task → Codex or Claude proposal → your check command
+                     → the other provider reviews → uncommitted diff + result.json
+```
+
+Try the fixture without calling either provider:
+
+```sh
+git clone https://github.com/Altitud-Studio-S-L-U/forge.git
+cd forge
+node examples/quickstart/run.mjs --prepare
+```
+
+Requires **Node.js 24 and Git**. Expected: `Baseline: failed as expected` and `Preparation complete; no provider was called`. The [full walkthrough](examples/quickstart/README.md) explains the temporary files and the optional `--live` run, which uses your authenticated provider accounts and their usage limits.
 
 ## Run
 
@@ -55,73 +66,25 @@ At implementation checkpoints, staged changes and non-ignored changes outside th
 
 ## Architecture
 
-The orchestration is a bounded state machine: proposal, check, review, optionally one repair/check/review, then a result. Provider-specific process arguments and decoding stay behind one adapter function. The core does not import a provider SDK or obtain credentials itself.
-
-| Module | Responsibility |
-| --- | --- |
-| `src/cli.mjs` | Parse operator input, propagate cancellation and map results to exit codes. |
-| `src/forge.mjs` | Coordinate phases, verification and the evidence report. |
-| `src/providers.mjs` | Resolve installed executables and validate each CLI's response protocol. |
-| `src/contracts.mjs` | Validate the closed response schemas and screen common credential patterns. |
-| `src/files.mjs` | Capture bounded UTF-8 context and apply hash-bound file replacements. |
-| `src/git.mjs` | Enforce branch, HEAD, clean-start and implementation scope preconditions. |
-| `src/process.mjs` | Run explicit argv, bound output/deadlines and terminate owned child trees. |
-
-The workflow accepts a provider function and process runner at its integration boundary. Tests can substitute responses while still using real Git repositories, file replacements and verification processes. There is no plugin registry, background service or persistent work queue.
+Forge captures selected files, obtains a proposal, applies hash-bound replacements, runs your check and requests independent review. At most one repair is attempted. See the [module map](docs/operation.md#architecture).
 
 ## Results and process limits
 
-Every run creates a new private-mode directory under `--output` (the OS temporary directory by default) and writes `result.json`. It records context hashes, provider results, check exit status, changed files and bounded error codes. It omits raw provider stdout/stderr, replacement source and task text. Codex's temporary final-answer file is removed after decoding. CLI-native authentication and session storage remain managed by those CLIs; Forge does not modify or inspect their credentials.
+Each run writes `result.json`. Exit `0` means the requested workflow completed; implementation without a check, findings and blocked runs have distinct nonzero outcomes. Changes remain uncommitted even when a check or review fails.
 
-| Status | Meaning | Exit |
-| --- | --- | --- |
-| `research-complete` | Both local research responses completed. | 0 |
-| `review-complete` | Independent review passed; no test or approval is implied. | 0 |
-| `ready-for-human-review` | Implementation check exited successfully and final independent review passed. | 0 |
-| `needs-verification` | Review passed but no independent check command was supplied. | 1 |
-| `findings` | Review or verification still failed after at most one repair. | 1 |
-| `blocked` | Provider, schema, permission, timeout, cancellation or checkout precondition failed. | 2 |
-
-The per-process deadline defaults to 120 seconds (maximum 300); the workflow deadline defaults to 480 seconds (maximum 900). SIGINT/SIGTERM cancel the run. Output is capped across stdout and stderr; stderr is counted without being retained. Cancellation/deadline kills the owned process tree through Windows `taskkill /T /F` or a POSIX process group. A model verdict never overrides a nonzero exit, a denied permission, invalid/truncated JSON or failed verification. No automatic retry is added to provider calls.
-
-Set `--codex-model` or `--claude-model` for an explicit model; otherwise the CLI default applies. `FORGE_CODEX_EXECUTABLE` and `FORGE_CLAUDE_EXECUTABLE` accept absolute `.exe` or JavaScript entrypoints. Default discovery uses PATH. On Windows, official npm wrappers resolve to their JavaScript entrypoint and run through the same Node executable; Forge never shell-interpolates prompts. Existing local credential stores are used. API-key/token environment variables are intentionally not forwarded; no new credentials are requested. External CLI hooks/MCP configuration are disabled for these bounded calls.
-
-This is a cooperation harness, not an operating-system security boundary. Codex retains its read-only sandbox as an additional control; both agents are instructed to return data without tools, and unexpected Codex tool operations fail the run. The native CLIs, OS account, PATH executables, Git configuration and operator-selected verification command remain trusted. Credential screening cannot identify every possible secret. File replacements are individually atomic and preserve existing executable mode on POSIX; a multi-file change is not one filesystem transaction. Another process with access to the same checkout can race filesystem operations. Inspect the resulting diff and reported conflicts before committing.
-
-Codex responses must include a started and completed turn. Unknown event/item types block the run instead of being treated as successful output. Only reasoning, agent messages and task-list items are admitted; this intentionally favors detection of incompatible CLI changes over silent compatibility. An exit-zero process and a plausible answer file alone are insufficient.
+Forge is not an OS security boundary: the installed CLIs, selected check command, Git configuration and OS account remain trusted. File replacements are individually atomic, not a multi-file transaction. Read the [status table and process limits](docs/operation.md#results-and-process-limits) before using it on a project.
 
 ## Skills and local plugin
 
-`skills/forge/SKILL.md` is shared instruction material for Codex and Claude Code. Claude can load this checkout for a single session without global installation:
-
-```sh
-claude --plugin-dir /absolute/forge
-```
-
-The `.claude-plugin/plugin.json` manifest exposes the local plugin. Loading a skill/plugin does not broaden permissions or authorize a deployment. No global configuration is changed by Forge.
+Instruction material and an optional local Claude plugin are included. See [local plugin setup](docs/operation.md#skills-and-local-plugin); loading either does not broaden permissions.
 
 ## Validation
 
-```sh
-node --test test/*.test.mjs
-claude plugin validate /absolute/forge
-```
-
-The tests exercise real child-process exits, split UTF-8, output limits, cancellation and descendant termination; real temporary Git repositories and Node tests verify scope, clean-branch restrictions, stale hashes, concurrent changes and bounded repair. Provider doubles cover failure contracts and do not establish real account/model access.
-
-Adapter tests execute synthetic CLI processes through the real adapters, including argument handling, stdin, incomplete Codex streams, unknown tool operations and raw-answer cleanup. POSIX executable-link discovery is exercised on Linux; it is explicitly skipped on Windows because it describes POSIX npm installations. No account tokens or live project source are needed by the test suite.
-
-Provider integration follows the installed CLI help and official [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) and [Claude Code CLI](https://code.claude.com/docs/en/cli-reference) contracts. Model availability, native CLI formats and permissions can change; test the installed versions before relying on a different release.
+The suite exercises real processes and temporary Git repositories, with provider doubles for CLI contracts. See [test commands and coverage limits](docs/operation.md#validation). Live provider compatibility is checked separately.
 
 ## CLI compatibility
 
-The adapter checks concrete CLI flags and response schemas. Use the [manual quickstart](examples/quickstart/README.md) to check your installed pair before adopting it; a version outside this table is unverified, not automatically compatible or incompatible.
-
-| Environment | Codex CLI | Claude Code | Checked integration |
-| --- | --- | --- | --- |
-| Windows, Node 24.11.1 | `0.166.0-alpha.5.1` | `2.0.59` | `--live`: Codex implementation, Node verification, Claude review; unchanged test and HEAD, one unstaged source change. |
-
-This reference was checked on 2026-11-03 with the providers' configured default models. It does not establish compatibility with other CLI versions, account permissions, models or operating systems. The Codex build above is a pre-release CLI; record the exact version instead of relying on `latest`. The automated suite separately checks provider contracts with doubles and does not need provider accounts.
+The recorded live reference uses Windows, Node 24.11.1, Codex CLI `0.166.0-alpha.5.1` and Claude Code `2.0.59`. Other combinations are unverified. See the [dated compatibility reference](docs/operation.md#cli-compatibility) and run the quickstart with your installed pair.
 
 ## Contributing and security
 
