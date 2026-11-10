@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { readFile, lstat } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runForge } from './forge.mjs';
+import { readRegularFile } from './files.mjs';
 import { ForgeError, requireInput } from './errors.mjs';
 
 export const help = `Forge: bounded Codex + Claude Code cooperation (Node 24, existing CLI authentication).
@@ -40,8 +40,7 @@ export async function main(args = process.argv.slice(2)) {
     requireInput(parsed.positionals.length === 1, 'Select exactly one mode.');
     const file = parsed.values['task-file'];
     requireInput(file && isAbsolute(file), 'Task file requires an absolute path.');
-    const info = await lstat(file);
-    requireInput(info.isFile() && !info.isSymbolicLink() && info.size <= 24000, 'Task must be a bounded regular file.');
+    const task = await readRegularFile(file, 24000, () => new ForgeError('INVALID_INPUT', 'Task must be a bounded regular file.'));
     let verify;
     try { verify = parsed.values['verify-json'] === undefined ? undefined : JSON.parse(parsed.values['verify-json']); }
     catch { throw new ForgeError('INVALID_INPUT', 'Verification must be a JSON argv array.'); }
@@ -50,7 +49,7 @@ export async function main(args = process.argv.slice(2)) {
       if (value === undefined) return undefined;
       requireInput(/^[0-9]{4,6}$/u.test(value), 'Timeout requires whole decimal milliseconds.'); return Number(value);
     };
-    const report = await runForge({ mode: parsed.positionals[0], repo: parsed.values.repo, task: await readFile(file, 'utf8'),
+    const report = await runForge({ mode: parsed.positionals[0], repo: parsed.values.repo, task,
       files: parsed.values.file, coder: parsed.values.coder, reviewer: parsed.values.reviewer,
       codexModel: parsed.values['codex-model'], claudeModel: parsed.values['claude-model'], verify,
       timeoutMs: integer('timeout-ms'), deadlineMs: integer('deadline-ms'),
