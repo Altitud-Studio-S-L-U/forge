@@ -57,6 +57,26 @@ export async function fileSnapshot(root, name) {
     }
   }
 }
+// Opens before inspecting, so every check describes the file that is read rather than whatever the path named a
+// moment earlier. O_NOFOLLOW refuses a link where supported; on Windows the path must still name the opened file.
+export async function readRegularFile(path, maxBytes, invalid) {
+  let handle;
+  try { handle = await open(path, constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK)); }
+  catch (error) { if (error.code === 'ELOOP') throw invalid(); throw error; }
+  try {
+    const info = await handle.stat({ bigint: true });
+    if (!info.isFile() || info.size > BigInt(maxBytes)) throw invalid();
+    const entry = await lstat(path, { bigint: true });
+    if (entry.isSymbolicLink() || entry.dev !== info.dev || entry.ino !== info.ino) throw invalid();
+    const bytes = Buffer.alloc(maxBytes + 1); let total = 0;
+    while (total < bytes.length) {
+      const { bytesRead } = await handle.read(bytes, total, bytes.length - total, total);
+      if (bytesRead === 0) break; total += bytesRead;
+    }
+    if (total > maxBytes) throw invalid();
+    return bytes.subarray(0, total).toString('utf8');
+  } finally { await handle.close(); }
+}
 export async function captureFiles(root, names) {
   requireInput(Array.isArray(names) && names.length >= 1 && names.length <= 12 && new Set(names.map(name => name.toLowerCase())).size === names.length,
     'Select one to twelve distinct files explicitly.');

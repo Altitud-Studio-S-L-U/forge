@@ -1,7 +1,8 @@
-import { access, lstat, mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, realpath, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { schemas, parseResponse } from './contracts.mjs';
 import { ForgeError, requireInput } from './errors.mjs';
+import { readRegularFile } from './files.mjs';
 import { childEnvironment, runProcess } from './process.mjs';
 
 async function onPath(name) {
@@ -91,9 +92,8 @@ export async function callProvider({ provider, kind, prompt, directory, signal, 
   try {
     const result = await runProcess({ ...command, args, cwd: directory, input: prompt, signal, timeoutMs, env: childEnvironment() });
     validateCodexEvents(result.stdout);
-    const info = await lstat(outputFile);
-    if (!info.isFile() || info.isSymbolicLink() || info.size > 512 * 1024) throw new ForgeError('INVALID_RESPONSE', 'Codex result file exceeds its contract.');
-    return parseResponse(kind, await readFile(outputFile, 'utf8'));
+    const answer = await readRegularFile(outputFile, 512 * 1024, () => new ForgeError('INVALID_RESPONSE', 'Codex result file exceeds its contract.'));
+    return parseResponse(kind, answer);
   } catch (error) {
     if (error instanceof ForgeError) throw error;
     throw new ForgeError('INVALID_RESPONSE', 'Codex did not supply a readable final result.');
