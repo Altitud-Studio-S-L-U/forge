@@ -1,5 +1,7 @@
 # Forge
 
+[![CI](https://github.com/Altitud-Studio-S-L-U/forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Altitud-Studio-S-L-U/forge/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Altitud-Studio-S-L-U/forge/actions/workflows/codeql.yml/badge.svg)](https://github.com/Altitud-Studio-S-L-U/forge/actions/workflows/codeql.yml)
 [![Node.js 24](https://img.shields.io/badge/Node.js-24-43853d?logo=node.js&logoColor=white)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime_dependencies-0-245b78)](package.json)
@@ -123,6 +125,6 @@ This reference was checked on 2026-11-03 with the providers' configured default 
 
 ## Contributing and security
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and [SECURITY.md](SECURITY.md) for the trust model and confidential reporting. Submit changes through pull requests. Releases and validation are manual; the repository has no CI/CD workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and [SECURITY.md](SECURITY.md) for the trust model and confidential reporting. Submit changes through pull requests. Every pull request runs the tests on Linux, macOS and Windows and a CodeQL scan; these use test doubles, so live provider runs remain manual, as do releases.
 
 [MIT license](LICENSE), copyright 2026 Altitud Studio S.L.U.
